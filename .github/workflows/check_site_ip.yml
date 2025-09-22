@@ -2,7 +2,7 @@ name: Check Site IP 24h with Logging
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # 30分ごとに実行
+    - cron: '*/30 * * * *'  # 30分ごと
   workflow_dispatch: # 手動実行も可能
 
 jobs:
@@ -10,30 +10,51 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # -------------------------------
+      # 1. ログ用フォルダ作成
+      # -------------------------------
       - name: ログ用フォルダ作成
-        run: |
-          mkdir -p logs
+        run: mkdir -p logs
 
+      # -------------------------------
+      # 2. digコマンド確認（必要ならインストール）
+      # -------------------------------
+      - name: digコマンド確認
+        run: |
+          if ! command -v dig &> /dev/null
+          then
+            echo "dig コマンドが無いのでインストールします"
+            sudo apt-get update
+            sudo apt-get install -y dnsutils
+          fi
+
+      # -------------------------------
+      # 3. 24時間実行判定
+      # -------------------------------
       - name: 24時間内か確認
         run: |
-          # 開始日時（UTCで指定）
-          START_TIME="2025-09-22T09:00:00Z"
+          START_TIME="2025-09-22T09:00:00Z"  # 開始日時
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           END=$(date -u -d "$START_TIME + 24 hours" +"%Y-%m-%dT%H:%M:%SZ")
-          
+
           if [[ "$NOW" > "$END" ]]; then
             echo "24時間経過したためジョブを終了します。"
             exit 0
           fi
 
+      # -------------------------------
+      # 4. サイトアクセス確認とIP取得
+      # -------------------------------
       - name: サイトアクセス確認とIP取得
         run: |
           SITE_URL="https://example.com"
           DOMAIN=$(echo $SITE_URL | awk -F/ '{print $3}')
           LOG_FILE="logs/${DOMAIN}_$(date -u +'%Y%m%d%H%M').log"
 
+          # HTTPステータス確認
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SITE_URL)
 
+          # ログ出力
           echo "チェック日時: $(date -u)" >> $LOG_FILE
           echo "URL: $SITE_URL" >> $LOG_FILE
           echo "HTTPステータス: $HTTP_STATUS" >> $LOG_FILE
@@ -46,7 +67,14 @@ jobs:
             echo "アクセス失敗" >> $LOG_FILE
           fi
 
-          # ログの確認用
+          # 標準出力にも表示
           cat $LOG_FILE
 
+      # -------------------------------
+      # 5. ログをアーティファクトとしてアップロード
+      # -------------------------------
       - name: 保存したログをアーティファクトとしてアップロード
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-ip-logs
+          path: logs/
