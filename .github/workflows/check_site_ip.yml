@@ -1,0 +1,56 @@
+name: Check Site IP 24h with Logging
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # 30分ごとに実行
+  workflow_dispatch: # 手動でも実行可能
+
+jobs:
+  get_ip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ログ用フォルダ作成
+        run: |
+          mkdir -p logs
+
+      - name: 24時間内か確認
+        run: |
+          # 開始日時（UTCで指定）
+          START_TIME="2025-09-22T09:00:00Z"
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          END=$(date -u -d "$START_TIME + 24 hours" +"%Y-%m-%dT%H:%M:%SZ")
+          
+          if [[ "$NOW" > "$END" ]]; then
+            echo "24時間経過したためジョブを終了します。"
+            exit 0
+          fi
+
+      - name: サイトアクセス確認とIP取得
+        run: |
+          SITE_URL="https://example.com"
+          DOMAIN=$(echo $SITE_URL | awk -F/ '{print $3}')
+          LOG_FILE="logs/${DOMAIN}_$(date -u +'%Y%m%d%H%M').log"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SITE_URL)
+
+          echo "チェック日時: $(date -u)" >> $LOG_FILE
+          echo "URL: $SITE_URL" >> $LOG_FILE
+          echo "HTTPステータス: $HTTP_STATUS" >> $LOG_FILE
+
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            SITE_IP=$(dig +short $DOMAIN | head -n 1)
+            echo "アクセス成功" >> $LOG_FILE
+            echo "サイトIP: $SITE_IP" >> $LOG_FILE
+          else
+            echo "アクセス失敗" >> $LOG_FILE
+          fi
+
+          # ログの確認用
+          cat $LOG_FILE
+
+      - name: 保存したログをアーティファクトとしてアップロード
+        uses: actions/upload-artifact@v3
+        with:
+          name: site-ip-logs
+          path: logs/
