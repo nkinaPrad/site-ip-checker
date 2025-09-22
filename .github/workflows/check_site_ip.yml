@@ -3,7 +3,7 @@ name: Check Site IP 24h with Logging
 on:
   schedule:
     - cron: '*/30 * * * *'  # 30分ごとに実行
-  workflow_dispatch: # 手動でも実行可能
+  workflow_dispatch: # 手動実行も可能
 
 jobs:
   get_ip:
@@ -50,7 +50,3 @@ jobs:
           cat $LOG_FILE
 
       - name: 保存したログをアーティファクトとしてアップロード
-        uses: actions/upload-artifact@v3
-        with:
-          name: site-ip-logs
-          path: logs/
